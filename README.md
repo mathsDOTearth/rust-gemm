@@ -7,7 +7,7 @@ To run the code:
 rustup override set nightly  
 RUSTFLAGS="-C target-cpu=native" cargo run --release  
 
-Output from a 4 core ARM N1 CPU:  
+Output from a 4 core ARM N1 NEON CPU:  
 ```
 f64 scalar: 1.30s
 f64 parallel: 332.13ms
@@ -27,7 +27,7 @@ Speedup: 24.67
 Threads: 4
 Running with NEON
 ```
-Output from a 16 thread AMD 5700x:
+Output from a 16 thread AMD 5700x AVX2 CPU:
 ```
 f64 scalar: 698.57ms
 f64 parallel: 86.11ms
@@ -47,7 +47,7 @@ Speedup: 51.90
 Threads: 16
 Running with AVX2
 ```
-Output from a 52 thread Xeon Platinum 8170
+Output from a 52 thread Xeon Platinum 8170 AVX512 CPU:
 ```
 f64 scalar: 1.19s
 f64 parallel: 83.54ms
