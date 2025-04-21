@@ -1,4 +1,4 @@
-//! GEMM with scalar, AVX2/NEON, and AVX512 support for f64/f32
+//! GEMM with scalar, AVX2, NEON, and AVX512 support for f64/f32
 //! Written By Rich from mathsDOTearth 2025
 #![cfg_attr(target_arch = "x86_64", feature(avx512_target_feature))]
 #![cfg_attr(target_arch = "x86_64", feature(stdarch_x86_avx512))]
@@ -61,7 +61,7 @@ unsafe impl SimdElem for f32 {
     }
 }
 
-// x86_64 AVX2 f64
+// x86_64 AVX2 f64 (fallback)
 #[cfg(all(target_arch = "x86_64", not(target_feature = "avx512f")))]
 unsafe impl SimdElem for f64 {
     type Scalar = f64;
@@ -79,7 +79,7 @@ unsafe impl SimdElem for f64 {
         arr[0] + arr[2]
     }
 }
-// x86_64 AVX2 f32
+// x86_64 AVX2 f32 (fallback)
 #[cfg(all(target_arch = "x86_64", not(target_feature = "avx512f")))]
 unsafe impl SimdElem for f32 {
     type Scalar = f32;
@@ -115,7 +115,6 @@ unsafe impl SimdElem for f64 {
         arr[0] + arr[1]
     }
 }
-
 // aarch64 NEON f32
 #[cfg(target_arch = "aarch64")]
 unsafe impl SimdElem for f32 {
@@ -166,7 +165,6 @@ pub fn gemm_scalar_f64(alpha: f64, a: &[Vec<f64>], b_t: &[Vec<f64>], beta: f64, 
         for i in 0..rows { for j in 0..cols { let mut sum=0f64; for k in 0..a[0].len() { sum+=a[i][k]*b_t[j][k]; } c[i][j]=alpha*sum+beta*c[i][j]; }}
     }
 }
-
 pub fn gemm_scalar_f32(alpha: f32, a: &[Vec<f32>], b_t: &[Vec<f32>], beta: f32, c: &mut [Vec<f32>], parallel: bool) {
     let rows = a.len();
     let cols = b_t.len();
@@ -230,6 +228,38 @@ pub fn gemm_f32(alpha: f32, a: &[Vec<f32>], b_t: &[Vec<f32>], beta: f32, c: &mut
     }
 }
 
+/// check tollerance of results
+// Matrix element trait for comparison
+pub trait MatrixElem: Copy + PartialOrd + std::ops::Sub<Output=Self> {
+    fn abs(self) -> Self;
+    fn tol() -> Self;
+    fn label() -> &'static str;
+}
+impl MatrixElem for f64 {
+    fn abs(self) -> Self { f64::abs(self) }
+    fn tol() -> Self { 1e-8 }
+    fn label() -> &'static str { "f64" }
+}
+impl MatrixElem for f32 {
+    fn abs(self) -> Self { f32::abs(self) }
+    fn tol() -> Self { 1e-3 }
+    fn label() -> &'static str { "f32" }
+}
+
+// Generic correctness checker
+pub fn check_matrix<T: MatrixElem + std::fmt::Display>(c1: &[Vec<T>], c2: &[Vec<T>], n: usize) {
+    let tol = T::tol();
+    for i in 0..n {
+        for j in 0..n {
+            let diff = (c1[i][j] - c2[i][j]).abs();
+            if diff > tol {
+                panic!("{} mismatch at ({},{}): ref={} vs simd={}",
+                       T::label(), i, j, c1[i][j], c2[i][j]);
+            }
+        }
+    }
+    println!("✔ {} SIMD‑parallel matches reference (tol={})", T::label(), tol);
+}
 // ----------------------
 // main with full benchmarking
 // ----------------------
@@ -241,21 +271,25 @@ fn main() {
     let a64: Vec<Vec<f64>> = (0..N).map(|_| (0..N).map(|_| rng.uni() as f64).collect()).collect();
     let bt64 = transpose(&a64);
     let mut c64 = vec![vec![0f64; N]; N];
+    let mut c64_scalar = vec![vec![0f64; N]; N];
 
-    let t0 = Instant::now(); gemm_scalar_f64(1.0, &a64, &bt64, 0.0, &mut c64, false); let f64_scalar = t0.elapsed();
+    let t0 = Instant::now(); gemm_scalar_f64(1.0, &a64, &bt64, 0.0, &mut c64_scalar, false); let f64_scalar = t0.elapsed();
     println!("f64 scalar: {:.2?}", f64_scalar);
 
     let t1 = Instant::now(); gemm_scalar_f64(1.0, &a64, &bt64, 0.0, &mut c64, true); let f64_par = t1.elapsed();
     println!("f64 parallel: {:.2?}", f64_par);
     println!("Speedup: {:.2}", f64_scalar.as_secs_f64() / f64_par.as_secs_f64());
+    check_matrix(&c64, &c64_scalar, N);
 
     let t2 = Instant::now(); gemm_f64(1.0, &a64, &bt64, 0.0, &mut c64, false); let f64_vec = t2.elapsed();
     println!("f64 vector: {:.2?}", f64_vec);
     println!("Speedup: {:.2}", f64_scalar.as_secs_f64() / f64_vec.as_secs_f64());
-
+    check_matrix(&c64, &c64_scalar, N);
+    
     let t3 = Instant::now(); gemm_f64(1.0, &a64, &bt64, 0.0, &mut c64, true); let f64_vec_par = t3.elapsed();
     println!("f64 vector parallel: {:.2?}", f64_vec_par);
     println!("Speedup: {:.2}", f64_scalar.as_secs_f64() / f64_vec_par.as_secs_f64());
+    check_matrix(&c64, &c64_scalar, N);
 
     println!(" ");
   
@@ -263,22 +297,27 @@ fn main() {
     let a32: Vec<Vec<f32>> = (0..N).map(|_| (0..N).map(|_| rng.uni() as f32).collect()).collect();
     let bt32 = transpose(&a32);
     let mut c32 = vec![vec![0f32; N]; N];
+    let mut c32_scalar = vec![vec![0f32; N]; N];
 
-    let t4 = Instant::now(); gemm_scalar_f32(1.0, &a32, &bt32, 0.0, &mut c32, false); let f32_scalar = t4.elapsed();
+    let t4 = Instant::now(); gemm_scalar_f32(1.0, &a32, &bt32, 0.0, &mut c32_scalar, false); let f32_scalar = t4.elapsed();
     println!("f32 scalar: {:.2?}", f32_scalar);
 
     let t5 = Instant::now(); gemm_scalar_f32(1.0, &a32, &bt32, 0.0, &mut c32, true); let f32_par = t5.elapsed();
     println!("f32 parallel: {:.2?}", f32_par);
     println!("Speedup: {:.2}", f32_scalar.as_secs_f64() / f32_par.as_secs_f64());
+    check_matrix(&c32, &c32_scalar, N);
 
     let t6 = Instant::now(); gemm_f32(1.0, &a32, &bt32, 0.0, &mut c32, false); let f32_vec = t6.elapsed();
     println!("f32 vector: {:.2?}", f32_vec);
     println!("Speedup: {:.2}", f32_scalar.as_secs_f64() / f32_vec.as_secs_f64());
+    check_matrix(&c32, &c32_scalar, N);
 
     let t7 = Instant::now(); gemm_f32(1.0, &a32, &bt32, 0.0, &mut c32, true); let f32_vec_par = t7.elapsed();
     println!("f32 vector parallel: {:.2?}", f32_vec_par);
     println!("Speedup: {:.2}", f32_scalar.as_secs_f64() / f32_vec_par.as_secs_f64());
+    check_matrix(&c32, &c32_scalar, N);
 
+    println!(" ");
     println!("Threads: {}", current_num_threads());
     
     #[cfg(target_arch = "aarch64")]
