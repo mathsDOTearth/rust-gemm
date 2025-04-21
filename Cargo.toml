@@ -2,6 +2,10 @@
 name = "rust-gemm"
 version = "0.2.0"
 edition = "2024"
+authors = ["R Neale mathsDOTearth"]
+description = "A Simple GEMM like function with CPU Vector Optimsation"
+license = "MIT"
+repository = "https://github.com/mathsDOTearth/rust-gemm"
 
 [profile.release]
 codegen-units = 1
