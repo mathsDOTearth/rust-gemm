@@ -73,10 +73,14 @@ unsafe impl SimdElem for f64 {
     #[inline(always)] unsafe fn fmadd(acc: __m256d, a: __m256d, b: __m256d) -> __m256d {
         _mm256_fmadd_pd(a, b, acc)
     }
-    #[inline(always)] unsafe fn reduce(v: __m256d) -> f64 {
-        let tmp = _mm256_hadd_pd(v, v);
-        let arr: [f64; 4] = std::mem::transmute(tmp);
-        arr[0] + arr[2]
+    #[inline(always)]
+    unsafe fn reduce(v: __m256d) -> f64 {
+        let hi  = _mm256_extractf128_pd(v, 1);
+        let mut lo = _mm256_castpd256_pd128(v);
+        lo = _mm_add_pd(lo, hi);               // two partial sums
+    
+        lo = _mm_hadd_pd(lo, lo);              // [total, ?]
+        _mm_cvtsd_f64(lo)
     }
 }
 // x86_64 AVX2 f32 (fallback)
@@ -91,11 +95,19 @@ unsafe impl SimdElem for f32 {
     #[inline(always)] unsafe fn fmadd(acc: __m256, a: __m256, b: __m256) -> __m256 {
         _mm256_fmadd_ps(a, b, acc)
     }
-    #[inline(always)] unsafe fn reduce(v: __m256) -> f32 {
-        let tmp1 = _mm256_hadd_ps(v, v);
-        let tmp2 = _mm256_hadd_ps(tmp1, tmp1);
-        _mm_cvtss_f32(_mm256_castps256_ps128(tmp2))
-    }
+    #[inline(always)]
+    unsafe fn reduce(v: __m256) -> f32 {
+        // 1. add high 128 to low 128
+        let hi  = _mm256_extractf128_ps(v, 1);
+        let mut lo = _mm256_castps256_ps128(v);
+        lo = _mm_add_ps(lo, hi);               // four partial sums
+    
+        // 2. horizontal add inside the 128-bit lane
+        let lo = _mm_hadd_ps(lo, lo);          // [a0+a1, a2+a3, \u2026]
+        let lo = _mm_hadd_ps(lo, lo);          // [total,  ?,  ?,  ?]
+    
+        _mm_cvtss_f32(lo)                      // pick the scalar
+    } 
 }
 
 // aarch64 NEON f64
