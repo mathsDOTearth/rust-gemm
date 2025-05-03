@@ -1,4 +1,5 @@
 //! GEMM with scalar, AVX2, NEON, and AVX512 support for f64/f32
+//! RISC-V RVV 1.0 support via a C function in vector_dot.c
 //! Written By Rich from mathsDOTearth 2025
 #![cfg_attr(target_arch = "x86_64", feature(avx512_target_feature))]
 #![cfg_attr(target_arch = "x86_64", feature(stdarch_x86_avx512))]
@@ -22,6 +23,27 @@ pub unsafe trait SimdElem: Copy + Sized {
     unsafe fn store(ptr: *mut Self::Scalar, v: Self::Reg);
     unsafe fn fmadd(acc: Self::Reg, a: Self::Reg, b: Self::Reg) -> Self::Reg;
     unsafe fn reduce(v: Self::Reg) -> Self::Scalar;
+}
+
+// only on actual RISC-V targets with RVV
+#[cfg(target_arch = "riscv64")]
+mod rvv_bindings {
+    unsafe extern "C" {
+        pub fn vector_dot_f32(a: *const f32, b: *const f32, n: usize) -> f32;
+        pub fn vector_dot_f64(a: *const f64, b: *const f64, n: usize) -> f64;
+    }
+}
+
+#[cfg(target_arch = "riscv64")]
+pub fn dot_f32_rvv(a: &[f32], b: &[f32]) -> f32 {
+    assert_eq!(a.len(), b.len());
+    unsafe { rvv_bindings::vector_dot_f32(a.as_ptr(), b.as_ptr(), a.len()) }
+}
+
+#[cfg(target_arch = "riscv64")]
+pub fn dot_f64_rvv(a: &[f64], b: &[f64]) -> f64 {
+    assert_eq!(a.len(), b.len());
+    unsafe { rvv_bindings::vector_dot_f64(a.as_ptr(), b.as_ptr(), a.len()) }
 }
 
 // x86_64 AVX512 f64
@@ -83,7 +105,7 @@ unsafe impl SimdElem for f64 {
         _mm_cvtsd_f64(lo)
     }
 }
-// x86_64 AVX2 f32 (fallback)
+// x86_64 AVX2 f32 (x64 fallback)
 #[cfg(all(target_arch = "x86_64", not(target_feature = "avx512f")))]
 unsafe impl SimdElem for f32 {
     type Scalar = f32;
@@ -204,6 +226,7 @@ pub fn gemm_scalar_f32(alpha: f32, a: &[Vec<f32>], b_t: &[Vec<f32>], beta: f32, 
 }
 
 /// Convenience wrappers for SIMD
+#[cfg(not(target_arch = "riscv64"))]
 pub fn gemm_f64(alpha: f64, a: &[Vec<f64>], b_t: &[Vec<f64>], beta: f64, c: &mut [Vec< f64>], parallel: bool) {
     if parallel {
         c.par_iter_mut().enumerate().for_each(|(i, row_c)| {
@@ -222,6 +245,26 @@ pub fn gemm_f64(alpha: f64, a: &[Vec<f64>], b_t: &[Vec<f64>], beta: f64, c: &mut
     }
 }
 
+#[cfg(target_arch = "riscv64")]
+pub fn gemm_f64(alpha: f64, a: &[Vec<f64>], b_t: &[Vec<f64>], beta: f64, c: &mut [Vec< f64>], parallel: bool) {
+    if parallel {
+        c.par_iter_mut().enumerate().for_each(|(i, row_c)| {
+            for j in 0..b_t.len() {
+                let sum = unsafe { dot_f64_rvv::<f64>(&a[i], &b_t[j]) };
+                row_c[j] = alpha * sum + beta * row_c[j];
+            }
+        });
+    } else {
+        for i in 0..a.len() {
+            for j in 0..b_t.len() {
+                let sum = unsafe { dot_f64_rvv::<f64>(&a[i], &b_t[j]) };
+                c[i][j] = alpha * sum + beta * c[i][j];
+            }
+        }
+    }
+}
+
+#[cfg(not(target_arch = "riscv64"))]
 pub fn gemm_f32(alpha: f32, a: &[Vec<f32>], b_t: &[Vec<f32>], beta: f32, c: &mut [Vec<f32>], parallel: bool) {
     if parallel {
         c.par_iter_mut().enumerate().for_each(|(i, row_c)| {
@@ -234,6 +277,26 @@ pub fn gemm_f32(alpha: f32, a: &[Vec<f32>], b_t: &[Vec<f32>], beta: f32, c: &mut
         for i in 0..a.len() {
             for j in 0..b_t.len() {
                 let sum = unsafe { dot_generic::<f32>(&a[i], &b_t[j]) };
+                c[i][j] = alpha * sum + beta * c[i][j];
+            }
+        }
+    }
+}
+
+#[cfg(target_arch = "riscv64")]
+pub fn gemm_f32(alpha: f32, a: &[Vec<f32>], b_t: &[Vec<f32>], beta: f32, c: &mut [Vec<f32>], parallel: bool) {
+    // RVV‐accelerated inner dot
+    if parallel {
+        c.par_iter_mut().enumerate().for_each(|(i, row_c)| {
+            for j in 0..b_t.len() {
+                let sum = dot_f32_rvv(&a[i], &b_t[j]);
+                row_c[j] = alpha * sum + beta * row_c[j];
+            }
+        });
+    } else {
+        for i in 0..a.len() {
+            for j in 0..b_t.len() {
+                let sum = dot_f32_rvv(&a[i], &b_t[j]);
                 c[i][j] = alpha * sum + beta * c[i][j];
             }
         }
