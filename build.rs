@@ -1,5 +1,4 @@
-// build.rs
-
+// build.rs used only for RISC-V RVV 1.0 build
 fn main() {
     // Cargo sets this to the target triple, e.g. "riscv64gc-unknown-linux-gnu"
     let target = std::env::var("TARGET").unwrap();
@@ -18,7 +17,4 @@ fn main() {
         println!("cargo:rustc-link-search=native={}", out_dir);
         println!("cargo:rustc-link-lib=static=vector_dot");
     }
-
-    // If you're also building matmul8x8.c for RVV, you can do the same
-    // under the same `if target.starts_with("riscv64")` guard.
 }
