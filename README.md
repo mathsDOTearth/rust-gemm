@@ -1,11 +1,15 @@
 # rust-gemm
-A GEMM like set of single (f32) and double (f64) precision functions that use CPU vector instructions including AVX2 AVX512 and NEON.
+A GEMM like set of single (f32) and double (f64) precision functions that use CPU vector instructions including AVX2 AVX512 and NEON.  There is additional RVV 1.0 support via a C function.
 
 The nightly build of rustc must be used to get support for AVX512.
 
-To run the code:  
+Sadly I was struggling for Rust native RVV support so have added this support via C
+
+To run the code:
+```  
 rustup override set nightly  
 RUSTFLAGS="-C target-cpu=native" cargo run --release  
+```
 
 Output from a 4 core ARM N1 NEON CPU:  
 ```
