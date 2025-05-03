@@ -12,6 +12,9 @@ codegen-units = 1
 lto = true
 opt-level = 3
 
+[build-dependencies]
+cc = "1.2.21"
+
 [dependencies]
 unirand = "0.1"
 rayon = "1.7.0"
