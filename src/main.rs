@@ -401,5 +401,6 @@ fn main() {
     println!("Running with AVX2");
     #[cfg(all(target_arch = "x86_64", target_feature = "avx512f"))]
     println!("Runnung with AVX512");
-    
+    #[cfg(target_arch = "riscv64")]
+    println!("Running with RVV 1.0);
 }
