@@ -250,14 +250,14 @@ pub fn gemm_f64(alpha: f64, a: &[Vec<f64>], b_t: &[Vec<f64>], beta: f64, c: &mut
     if parallel {
         c.par_iter_mut().enumerate().for_each(|(i, row_c)| {
             for j in 0..b_t.len() {
-                let sum = unsafe { dot_f64_rvv::<f64>(&a[i], &b_t[j]) };
+                let sum = { dot_f64_rvv(&a[i], &b_t[j]) };
                 row_c[j] = alpha * sum + beta * row_c[j];
             }
         });
     } else {
         for i in 0..a.len() {
             for j in 0..b_t.len() {
-                let sum = unsafe { dot_f64_rvv::<f64>(&a[i], &b_t[j]) };
+                let sum = { dot_f64_rvv(&a[i], &b_t[j]) };
                 c[i][j] = alpha * sum + beta * c[i][j];
             }
         }
@@ -289,14 +289,14 @@ pub fn gemm_f32(alpha: f32, a: &[Vec<f32>], b_t: &[Vec<f32>], beta: f32, c: &mut
     if parallel {
         c.par_iter_mut().enumerate().for_each(|(i, row_c)| {
             for j in 0..b_t.len() {
-                let sum = dot_f32_rvv(&a[i], &b_t[j]);
+                let sum = { dot_f32_rvv(&a[i], &b_t[j]) };
                 row_c[j] = alpha * sum + beta * row_c[j];
             }
         });
     } else {
         for i in 0..a.len() {
             for j in 0..b_t.len() {
-                let sum = dot_f32_rvv(&a[i], &b_t[j]);
+                let sum = { dot_f32_rvv(&a[i], &b_t[j]) };
                 c[i][j] = alpha * sum + beta * c[i][j];
             }
         }
