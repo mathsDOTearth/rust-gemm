@@ -14,14 +14,30 @@ use unirand::MarsagliaUniRng;
 use std::time::Instant;
 
 // SIMD abstraction
+///
+/// # Safety
+///
+/// Implementors must map `Reg` to a SIMD register type valid for the target's
+/// vector feature (e.g. NEON, AVX2, AVX512). Every method uses the corresponding
+/// intrinsics, so the target feature must be available on the running CPU.
 pub unsafe trait SimdElem: Copy + Sized {
     type Scalar: Copy + Send + Sync + std::ops::Add<Output = Self::Scalar> + std::ops::Mul<Output = Self::Scalar>;
     type Reg;
     const LANES: usize;
+    /// # Safety
+    /// The target SIMD feature must be available on the running CPU.
     unsafe fn zero() -> Self::Reg;
+    /// # Safety
+    /// `ptr` must be valid for reads of `LANES` scalars; the target SIMD feature must be available.
     unsafe fn load(ptr: *const Self::Scalar) -> Self::Reg;
+    /// # Safety
+    /// `ptr` must be valid for writes of `LANES` scalars; the target SIMD feature must be available.
     unsafe fn store(ptr: *mut Self::Scalar, v: Self::Reg);
+    /// # Safety
+    /// The target SIMD feature must be available on the running CPU.
     unsafe fn fmadd(acc: Self::Reg, a: Self::Reg, b: Self::Reg) -> Self::Reg;
+    /// # Safety
+    /// The target SIMD feature must be available on the running CPU.
     unsafe fn reduce(v: Self::Reg) -> Self::Scalar;
 }
 
@@ -52,15 +68,15 @@ unsafe impl SimdElem for f64 {
     type Scalar = f64;
     type Reg    = __m512d;
     const LANES : usize = 8;
-    #[inline(always)] unsafe fn zero() -> __m512d { _mm512_setzero_pd() }
-    #[inline(always)] unsafe fn load(ptr: *const f64) -> __m512d { _mm512_loadu_pd(ptr) }
-    #[inline(always)] unsafe fn store(ptr: *mut f64, v: __m512d) { _mm512_storeu_pd(ptr, v) }
+    #[inline(always)] unsafe fn zero() -> __m512d { unsafe { _mm512_setzero_pd() } }
+    #[inline(always)] unsafe fn load(ptr: *const f64) -> __m512d { unsafe { _mm512_loadu_pd(ptr) } }
+    #[inline(always)] unsafe fn store(ptr: *mut f64, v: __m512d) { unsafe { _mm512_storeu_pd(ptr, v) } }
     #[inline(always)] unsafe fn fmadd(acc: __m512d, a: __m512d, b: __m512d) -> __m512d {
-        _mm512_fmadd_pd(a, b, acc)
+        unsafe { _mm512_fmadd_pd(a, b, acc) }
     }
     #[inline(always)] unsafe fn reduce(v: __m512d) -> f64 {
         let mut buf = [0f64; 8];
-        _mm512_storeu_pd(buf.as_mut_ptr(), v);
+        unsafe { _mm512_storeu_pd(buf.as_mut_ptr(), v); }
         buf.iter().copied().sum()
     }
 }
@@ -70,15 +86,15 @@ unsafe impl SimdElem for f32 {
     type Scalar = f32;
     type Reg    = __m512;
     const LANES : usize = 16;
-    #[inline(always)] unsafe fn zero() -> __m512 { _mm512_setzero_ps() }
-    #[inline(always)] unsafe fn load(ptr: *const f32) -> __m512 { _mm512_loadu_ps(ptr) }
-    #[inline(always)] unsafe fn store(ptr: *mut f32, v: __m512) { _mm512_storeu_ps(ptr, v) }
+    #[inline(always)] unsafe fn zero() -> __m512 { unsafe { _mm512_setzero_ps() } }
+    #[inline(always)] unsafe fn load(ptr: *const f32) -> __m512 { unsafe { _mm512_loadu_ps(ptr) } }
+    #[inline(always)] unsafe fn store(ptr: *mut f32, v: __m512) { unsafe { _mm512_storeu_ps(ptr, v) } }
     #[inline(always)] unsafe fn fmadd(acc: __m512, a: __m512, b: __m512) -> __m512 {
-        _mm512_fmadd_ps(a, b, acc)
+        unsafe { _mm512_fmadd_ps(a, b, acc) }
     }
     #[inline(always)] unsafe fn reduce(v: __m512) -> f32 {
         let mut buf = [0f32; 16];
-        _mm512_storeu_ps(buf.as_mut_ptr(), v);
+        unsafe { _mm512_storeu_ps(buf.as_mut_ptr(), v); }
         buf.iter().copied().sum()
     }
 }
@@ -89,20 +105,22 @@ unsafe impl SimdElem for f64 {
     type Scalar = f64;
     type Reg    = __m256d;
     const LANES : usize = 4;
-    #[inline(always)] unsafe fn zero() -> __m256d { _mm256_setzero_pd() }
-    #[inline(always)] unsafe fn load(ptr: *const f64) -> __m256d { _mm256_loadu_pd(ptr) }
-    #[inline(always)] unsafe fn store(ptr: *mut f64, v: __m256d) { _mm256_storeu_pd(ptr, v) }
+    #[inline(always)] unsafe fn zero() -> __m256d { unsafe { _mm256_setzero_pd() } }
+    #[inline(always)] unsafe fn load(ptr: *const f64) -> __m256d { unsafe { _mm256_loadu_pd(ptr) } }
+    #[inline(always)] unsafe fn store(ptr: *mut f64, v: __m256d) { unsafe { _mm256_storeu_pd(ptr, v) } }
     #[inline(always)] unsafe fn fmadd(acc: __m256d, a: __m256d, b: __m256d) -> __m256d {
-        _mm256_fmadd_pd(a, b, acc)
+        unsafe { _mm256_fmadd_pd(a, b, acc) }
     }
     #[inline(always)]
     unsafe fn reduce(v: __m256d) -> f64 {
-        let hi  = _mm256_extractf128_pd(v, 1);
-        let mut lo = _mm256_castpd256_pd128(v);
-        lo = _mm_add_pd(lo, hi);               // two partial sums
-    
-        lo = _mm_hadd_pd(lo, lo);              // [total, ?]
-        _mm_cvtsd_f64(lo)
+        unsafe {
+            let hi  = _mm256_extractf128_pd(v, 1);
+            let mut lo = _mm256_castpd256_pd128(v);
+            lo = _mm_add_pd(lo, hi);               // two partial sums
+
+            lo = _mm_hadd_pd(lo, lo);              // [total, ?]
+            _mm_cvtsd_f64(lo)
+        }
     }
 }
 // x86_64 AVX2 f32 (x64 fallback)
@@ -111,25 +129,27 @@ unsafe impl SimdElem for f32 {
     type Scalar = f32;
     type Reg    = __m256;
     const LANES : usize = 8;
-    #[inline(always)] unsafe fn zero() -> __m256 { _mm256_setzero_ps() }
-    #[inline(always)] unsafe fn load(ptr: *const f32) -> __m256 { _mm256_loadu_ps(ptr) }
-    #[inline(always)] unsafe fn store(ptr: *mut f32, v: __m256) { _mm256_storeu_ps(ptr, v) }
+    #[inline(always)] unsafe fn zero() -> __m256 { unsafe { _mm256_setzero_ps() } }
+    #[inline(always)] unsafe fn load(ptr: *const f32) -> __m256 { unsafe { _mm256_loadu_ps(ptr) } }
+    #[inline(always)] unsafe fn store(ptr: *mut f32, v: __m256) { unsafe { _mm256_storeu_ps(ptr, v) } }
     #[inline(always)] unsafe fn fmadd(acc: __m256, a: __m256, b: __m256) -> __m256 {
-        _mm256_fmadd_ps(a, b, acc)
+        unsafe { _mm256_fmadd_ps(a, b, acc) }
     }
     #[inline(always)]
     unsafe fn reduce(v: __m256) -> f32 {
-        // 1. add high 128 to low 128
-        let hi  = _mm256_extractf128_ps(v, 1);
-        let mut lo = _mm256_castps256_ps128(v);
-        lo = _mm_add_ps(lo, hi);               // four partial sums
-    
-        // 2. horizontal add inside the 128-bit lane
-        let lo = _mm_hadd_ps(lo, lo);          // [a0+a1, a2+a3, \u2026]
-        let lo = _mm_hadd_ps(lo, lo);          // [total,  ?,  ?,  ?]
-    
-        _mm_cvtss_f32(lo)                      // pick the scalar
-    } 
+        unsafe {
+            // 1. add high 128 to low 128
+            let hi  = _mm256_extractf128_ps(v, 1);
+            let mut lo = _mm256_castps256_ps128(v);
+            lo = _mm_add_ps(lo, hi);               // four partial sums
+
+            // 2. horizontal add inside the 128-bit lane
+            let lo = _mm_hadd_ps(lo, lo);          // [a0+a1, a2+a3, \u2026]
+            let lo = _mm_hadd_ps(lo, lo);          // [total,  ?,  ?,  ?]
+
+            _mm_cvtss_f32(lo)                      // pick the scalar
+        }
+    }
 }
 
 // aarch64 NEON f64
@@ -138,14 +158,14 @@ unsafe impl SimdElem for f64 {
     type Scalar = f64;
     type Reg    = float64x2_t;
     const LANES : usize = 2;
-    #[inline(always)] unsafe fn zero() -> float64x2_t { vdupq_n_f64(0.0) }
-    #[inline(always)] unsafe fn load(ptr: *const f64) -> float64x2_t { vld1q_f64(ptr) }
-    #[inline(always)] unsafe fn store(ptr: *mut f64, v: float64x2_t) { vst1q_f64(ptr, v) }
+    #[inline(always)] unsafe fn zero() -> float64x2_t { unsafe { vdupq_n_f64(0.0) } }
+    #[inline(always)] unsafe fn load(ptr: *const f64) -> float64x2_t { unsafe { vld1q_f64(ptr) } }
+    #[inline(always)] unsafe fn store(ptr: *mut f64, v: float64x2_t) { unsafe { vst1q_f64(ptr, v) } }
     #[inline(always)] unsafe fn fmadd(acc: float64x2_t, a: float64x2_t, b: float64x2_t) -> float64x2_t {
-        vfmaq_f64(acc, a, b)
+        unsafe { vfmaq_f64(acc, a, b) }
     }
     #[inline(always)] unsafe fn reduce(v: float64x2_t) -> f64 {
-        let arr: [f64;2] = std::mem::transmute(v);
+        let arr: [f64;2] = unsafe { std::mem::transmute(v) };
         arr[0] + arr[1]
     }
 }
@@ -155,28 +175,33 @@ unsafe impl SimdElem for f32 {
     type Scalar = f32;
     type Reg    = float32x4_t;
     const LANES : usize = 4;
-    #[inline(always)] unsafe fn zero() -> float32x4_t { vdupq_n_f32(0.0) }
-    #[inline(always)] unsafe fn load(ptr: *const f32) -> float32x4_t { vld1q_f32(ptr) }
-    #[inline(always)] unsafe fn store(ptr: *mut f32, v: float32x4_t) { vst1q_f32(ptr, v) }
+    #[inline(always)] unsafe fn zero() -> float32x4_t { unsafe { vdupq_n_f32(0.0) } }
+    #[inline(always)] unsafe fn load(ptr: *const f32) -> float32x4_t { unsafe { vld1q_f32(ptr) } }
+    #[inline(always)] unsafe fn store(ptr: *mut f32, v: float32x4_t) { unsafe { vst1q_f32(ptr, v) } }
     #[inline(always)] unsafe fn fmadd(acc: float32x4_t, a: float32x4_t, b: float32x4_t) -> float32x4_t {
-        vfmaq_f32(acc, a, b)
+        unsafe { vfmaq_f32(acc, a, b) }
     }
     #[inline(always)] unsafe fn reduce(v: float32x4_t) -> f32 {
-        let arr: [f32;4] = std::mem::transmute(v);
+        let arr: [f32;4] = unsafe { std::mem::transmute(v) };
         arr.iter().copied().sum()
     }
 }
 
 /// SIMD dot-product
+///
+/// # Safety
+///
+/// The target SIMD feature required by `E` must be available on the running CPU,
+/// and `a` and `b` must have the same length.
 pub unsafe fn dot_generic<E: SimdElem>(a: &[E::Scalar], b: &[E::Scalar]) -> E::Scalar {
-    let mut i = 0; let len = a.len(); let mut acc = E::zero();
+    let mut i = 0; let len = a.len(); let mut acc = unsafe { E::zero() };
     while i + E::LANES <= len {
-        let va = E::load(a.as_ptr().add(i));
-        let vb = E::load(b.as_ptr().add(i));
-        acc = E::fmadd(acc, va, vb);
+        let va = unsafe { E::load(a.as_ptr().add(i)) };
+        let vb = unsafe { E::load(b.as_ptr().add(i)) };
+        acc = unsafe { E::fmadd(acc, va, vb) };
         i += E::LANES;
     }
-    let mut total = E::reduce(acc);
+    let mut total = unsafe { E::reduce(acc) };
     while i < len { total = total + (a[i] * b[i]); i += 1; }
     total
 }
@@ -369,7 +394,7 @@ fn main() {
     println!(" ");
   
     // f32 data
-    let a32: Vec<Vec<f32>> = (0..N).map(|_| (0..N).map(|_| rng.uni() as f32).collect()).collect();
+    let a32: Vec<Vec<f32>> = (0..N).map(|_| (0..N).map(|_| rng.uni()).collect()).collect();
     let bt32 = transpose(&a32);
     let mut c32 = vec![vec![0f32; N]; N];
     let mut c32_scalar = vec![vec![0f32; N]; N];
