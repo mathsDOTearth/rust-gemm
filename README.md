@@ -11,6 +11,34 @@ rustup override set nightly
 RUSTFLAGS="-C target-cpu=native" cargo run --release  
 ```
 
+Output from a 20 core ARM GB10 NEON CPU:
+```
+f64 scalar: 646.28ms
+f64 parallel: 40.67ms
+Speedup: 15.89
+✔ f64 SIMD‑parallel matches reference (tol=0.00000001)
+f64 vector: 300.09ms
+Speedup: 2.15
+✔ f64 SIMD‑parallel matches reference (tol=0.00000001)
+f64 vector parallel: 32.15ms
+Speedup: 20.10
+✔ f64 SIMD‑parallel matches reference (tol=0.00000001)
+
+f32 scalar: 556.81ms
+f32 parallel: 37.61ms
+Speedup: 14.81
+✔ f32 SIMD‑parallel matches reference (tol=0.001)
+f32 vector: 114.98ms
+Speedup: 4.84
+✔ f32 SIMD‑parallel matches reference (tol=0.001)
+f32 vector parallel: 15.74ms
+Speedup: 35.38
+✔ f32 SIMD‑parallel matches reference (tol=0.001)
+
+Threads: 20
+Running with NEON
+```
+
 Output from a 4 core ARM N1 NEON CPU:  
 ```
 f64 scalar: 1.30s
