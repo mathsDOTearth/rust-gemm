@@ -66,7 +66,7 @@ Speedup: 22.95
 Threads: 4
 Running with NEON
 ```
-Output from a 8 core RISC-V Spacemit K1 RVV 1.0
+Output from a 8 core RISC-V SpacemiT K1 RVV 1.0
 ```
 f64 scalar: 8.64s
 f64 parallel: 1.18s
@@ -88,6 +88,33 @@ Speedup: 2.66
 ✔ f32 SIMD‑parallel matches reference (tol=0.001)
 f32 vector parallel: 453.77ms
 Speedup: 15.63
+✔ f32 SIMD‑parallel matches reference (tol=0.001)
+ 
+Threads: 8
+Running with RVV 1.0
+```
+Output from a 8 core RISC-V SpacemiT K3 RVV 1.0
+```
+f64 scalar: 2.00s
+f64 parallel: 322.51ms
+Speedup: 6.20
+✔ f64 SIMD‑parallel matches reference (tol=0.00000001)
+f64 vector: 974.71ms
+Speedup: 2.05
+✔ f64 SIMD‑parallel matches reference (tol=0.00000001)
+f64 vector parallel: 252.04ms
+Speedup: 7.94
+✔ f64 SIMD‑parallel matches reference (tol=0.00000001)
+ 
+f32 scalar: 2.47s
+f32 parallel: 252.73ms
+Speedup: 9.76
+✔ f32 SIMD‑parallel matches reference (tol=0.001)
+f32 vector: 399.89ms
+Speedup: 6.17
+✔ f32 SIMD‑parallel matches reference (tol=0.001)
+f32 vector parallel: 128.72ms
+Speedup: 19.16
 ✔ f32 SIMD‑parallel matches reference (tol=0.001)
  
 Threads: 8
@@ -119,6 +146,33 @@ Speedup: 56.77
  
 Threads: 16
 Running with AVX2
+```
+Output from a 32 thread AMD 9950x AVX512 CPU:
+```
+f64 scalar: 390.50ms
+f64 parallel: 26.59ms
+Speedup: 14.68
+✔ f64 SIMD‑parallel matches reference (tol=0.00000001)
+f64 vector: 84.72ms
+Speedup: 4.61
+✔ f64 SIMD‑parallel matches reference (tol=0.00000001)
+f64 vector parallel: 8.22ms
+Speedup: 47.50
+✔ f64 SIMD‑parallel matches reference (tol=0.00000001)
+ 
+f32 scalar: 395.31ms
+f32 parallel: 23.71ms
+Speedup: 16.67
+✔ f32 SIMD‑parallel matches reference (tol=0.001)
+f32 vector: 42.48ms
+Speedup: 9.31
+✔ f32 SIMD‑parallel matches reference (tol=0.001)
+f32 vector parallel: 4.40ms
+Speedup: 89.87
+✔ f32 SIMD‑parallel matches reference (tol=0.001)
+ 
+Threads: 32
+Runnung with AVX512
 ```
 Output from a 52 thread Xeon Platinum 8170 AVX512 CPU:
 ```
