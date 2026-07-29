@@ -66,7 +66,7 @@ Speedup: 22.95
 Threads: 4
 Running with NEON
 ```
-Output from a 8 core RISC-V SpacemiT K1 RVV 1.0
+Output from a 8 core RISC-V SpacemiT K1 RVV 1.0:
 ```
 f64 scalar: 8.64s
 f64 parallel: 1.18s
@@ -93,7 +93,7 @@ Speedup: 15.63
 Threads: 8
 Running with RVV 1.0
 ```
-Output from a 8 core RISC-V SpacemiT K3 RVV 1.0
+Output from a 8 x100 core RISC-V SpacemiT K3 RVV 1.0:
 ```
 f64 scalar: 2.00s
 f64 parallel: 322.51ms
