@@ -120,6 +120,31 @@ Speedup: 19.16
 Threads: 8
 Running with RVV 1.0
 ```
+Output from a 8 a100 core RISC-V SpacemiT K3 RVV 1.0:
+```
+f32 dot kernel on wide cores: 126.99ms
+Speedup: 23.28
+✔ f32 SIMD‑parallel matches reference (tol=0.001)
+f32 wide sgemm, 1 wide core: 83.00ms
+Speedup: 35.62
+✔ f32 SIMD‑parallel matches reference (tol=0.001)
+f32 wide sgemm parallel: 17.83ms
+Speedup: 165.82
+✔ f32 SIMD‑parallel matches reference (tol=0.001)
+
+f64 dot kernel on wide cores: 257.34ms
+Speedup: 9.64
+✔ f64 SIMD‑parallel matches reference (tol=0.00000001)
+f64 wide dgemm, 1 wide core: 165.17ms
+Speedup: 15.02
+✔ f64 SIMD‑parallel matches reference (tol=0.00000001)
+f64 wide dgemm parallel: 36.85ms
+Speedup: 67.32
+✔ f64 SIMD‑parallel matches reference (tol=0.00000001)
+
+Threads: 8
+Running with RVV 1.0
+```
 Output from a 16 thread AMD 5700x AVX2 CPU:
 ```
 f64 scalar: 698.75ms
